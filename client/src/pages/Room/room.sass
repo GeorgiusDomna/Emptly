@@ -1,0 +1,25 @@
+.room_container
+    position: relative
+    display: flex
+    flex-direction: column
+    justify-content: center
+    align-items: center
+    height: 100vh
+    width: 100%
+    padding: 30px
+
+    .room_content_container
+        padding: 60px 0 
+        z-index: 10
+        height: 100%
+        width: calc(100% + 16px) // + ширина скроллбар
+        margin-right: -16px
+        scrollbar-gutter: stable
+
+
+    .dialogInput
+        max-width: 780px
+        margin-top: -30px
+        z-index: 30
+        background: #fff
+        box-shadow: 0 0 16px rgba(0, 0, 0, 0.25)
