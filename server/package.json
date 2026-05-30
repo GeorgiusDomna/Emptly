@@ -9,7 +9,7 @@
 		"certs:dev": "node scripts/generate-dev-certs.mjs",
 		"typecheck": "tsc --noEmit -p tsconfig.json",
 		"lint": "eslint \"src/**/*.ts\"",
-		"test": "npm run build:test && node --test 'dist-test/tests/**/*.test.js'",
+		"test": "npm run build:test && node --test dist-test/tests/*.test.js",
 		"format": "prettier --check \"src/**/*.{ts,js,json,md}\""
 	},
 	"type": "module",
