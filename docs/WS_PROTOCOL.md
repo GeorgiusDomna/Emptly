@@ -1,11 +1,14 @@
-# Контракт WebSocket (v1)
+# Контракт WebSocket (v1.0)
 
 ## Общие правила
 
 - Все сообщения в формате JSON.
 - Каждое сообщение содержит поле `type`.
+- Каждое сообщение содержит поле `protocolVersion`.
 - Сервер валидирует входящие сообщения и при ошибке отправляет событие `error`.
 - Клиент игнорирует события с `roomId`, отличным от текущей комнаты.
+
+Текущая версия протокола: `1.3`.
 
 ## События клиент -> сервер
 
@@ -15,7 +18,8 @@
 {
   "type": "join_room",
   "roomId": "string",
-  "userId": "string"
+  "userId": "string",
+  "protocolVersion": "1.0"
 }
 ```
 
@@ -28,7 +32,8 @@
   "userId": "string",
   "messageId": "string",
   "text": "string",
-  "sentAt": "ISO-8601 string"
+  "sentAt": "ISO-8601 string",
+  "protocolVersion": "1.0"
 }
 ```
 
@@ -42,7 +47,8 @@
 {
   "type": "leave_room",
   "roomId": "string",
-  "userId": "string"
+  "userId": "string",
+  "protocolVersion": "1.0"
 }
 ```
 
@@ -55,7 +61,8 @@
   "type": "room_joined",
   "roomId": "string",
   "userId": "string",
-  "participants": 1
+  "participants": 1,
+  "protocolVersion": "1.0"
 }
 ```
 
@@ -66,7 +73,8 @@
   "type": "peer_joined",
   "roomId": "string",
   "userId": "string",
-  "participants": 2
+  "participants": 2,
+  "protocolVersion": "1.0"
 }
 ```
 
@@ -79,7 +87,8 @@
   "messageId": "string",
   "userId": "string",
   "text": "string",
-  "sentAt": "ISO-8601 string"
+  "sentAt": "ISO-8601 string",
+  "protocolVersion": "1.0"
 }
 ```
 
@@ -90,7 +99,8 @@
   "type": "peer_left",
   "roomId": "string",
   "userId": "string",
-  "participants": 1
+  "participants": 1,
+  "protocolVersion": "1.0"
 }
 ```
 
@@ -101,7 +111,8 @@
   "type": "room_full",
   "roomId": "string",
   "code": "ROOM_FULL",
-  "message": "Комната уже занята двумя пользователями"
+  "message": "Комната уже занята двумя пользователями",
+  "protocolVersion": "1.0"
 }
 ```
 
@@ -110,7 +121,8 @@
 ```json
 {
   "type": "error",
-  "code": "INVALID_PAYLOAD | UNKNOWN_EVENT | ROOM_MISMATCH | INTERNAL_ERROR",
-  "message": "string"
+  "code": "INVALID_PAYLOAD | UNKNOWN_EVENT | ROOM_MISMATCH | HANDSHAKE_REQUIRED | HANDSHAKE_INVALID | RATE_LIMITED | INTERNAL_ERROR",
+  "message": "string",
+  "protocolVersion": "1.0"
 }
 ```

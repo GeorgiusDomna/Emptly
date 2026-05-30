@@ -24,6 +24,13 @@
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
   --radius: 0.625rem;
+  --chat-bubble-peer: oklch(0.955 0 0);
+  --chat-bubble-own: oklch(0.885 0 0);
+  --app-header-height: 3.75rem;
+  --room-header-gap: 1rem;
+  --room-header-sticky-top: calc(var(--app-header-height) + var(--room-header-gap));
+  --chat-composer-gap: 0.25rem;
+  --chat-composer-offset: 13rem;
 }
 
 .dark {
@@ -46,23 +53,228 @@
   --border: oklch(0.269 0 0);
   --input: oklch(0.269 0 0);
   --ring: oklch(0.439 0 0);
+  --chat-bubble-peer: oklch(0.3 0 0);
+  --chat-bubble-own: oklch(0.235 0 0);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
+  --color-input: var(--input);
   --color-ring: var(--ring);
-  /* Map all other variables */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@keyframes refresh-spring-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  18% {
+    transform: rotate(372deg);
+  }
+
+  24% {
+    transform: rotate(392deg);
+  }
+
+  30% {
+    transform: rotate(360deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@layer utilities {
+  .animate-refresh-spring {
+    animation: refresh-spring-spin 1.5s linear both;
+  }
+
+  .animate-link-sweep {
+    animation: link-sweep 0.5s ease-out forwards;
+  }
+
+  .animate-status-headline-text {
+    background-image: linear-gradient(
+      105deg,
+      var(--foreground) 0%,
+      var(--foreground) 40%,
+      color-mix(in oklch, var(--foreground) 70%, black) 50%,
+      var(--foreground) 60%,
+      var(--foreground) 100%
+    );
+    background-size: 220% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    animation: status-headline-text-sweep 2s ease-in-out infinite;
+  }
+}
+
+@keyframes link-sweep {
+  0% {
+    transform: translateX(-120%);
+  }
+
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+@property --dialog-input-fade-top {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --dialog-input-fade-bottom {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@keyframes dialog-input-scroll-fade {
+  0% {
+    --dialog-input-fade-top: 0px;
+    --dialog-input-fade-bottom: 1.25rem;
+  }
+
+  8% {
+    --dialog-input-fade-top: 1.25rem;
+  }
+
+  92% {
+    --dialog-input-fade-bottom: 1.25rem;
+  }
+
+  100% {
+    --dialog-input-fade-top: 1.25rem;
+    --dialog-input-fade-bottom: 0px;
+  }
+}
+
+@keyframes status-headline-text-sweep {
+  0% {
+    background-position: 115% center;
+  }
+
+  100% {
+    background-position: -15% center;
+  }
+}
+
+@layer components {
+  .glass-panel,
+  .dialog-input-glass {
+    background: color-mix(in oklch, var(--background) 68%, transparent);
+    border: 1px solid color-mix(in oklch, var(--foreground) 9%, transparent);
+    backdrop-filter: blur(20px) saturate(1.35);
+    -webkit-backdrop-filter: blur(20px) saturate(1.35);
+    box-shadow:
+      0 10px 40px -12px color-mix(in oklch, var(--foreground) 14%, transparent),
+      inset 0 1px 0 0 color-mix(in oklch, white 35%, transparent);
+  }
+
+  .dark .glass-panel,
+  .dark .dialog-input-glass {
+    background: color-mix(in oklch, var(--background) 52%, transparent);
+    border-color: color-mix(in oklch, white 14%, transparent);
+    box-shadow:
+      0 16px 48px -16px color-mix(in oklch, black 55%, transparent),
+      inset 0 1px 0 0 color-mix(in oklch, white 10%, transparent);
+  }
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass-panel,
+    .dialog-input-glass {
+      background: color-mix(in oklch, var(--background) 94%, transparent);
+    }
+
+    .dark .glass-panel,
+    .dark .dialog-input-glass {
+      background: color-mix(in oklch, var(--background) 88%, transparent);
+    }
+  }
+
+  .chat-scroll-anchor {
+    scroll-margin-bottom: var(--chat-composer-offset);
+  }
+
+  .site-navbar {
+    border: none;
+    border-bottom: 1px solid color-mix(in oklch, var(--foreground) 8%, transparent);
+    box-shadow: 0 10px 40px -12px color-mix(in oklch, var(--foreground) 14%, transparent);
+  }
+
+  .dark .site-navbar {
+    border-bottom-color: color-mix(in oklch, white 14%, transparent);
+    box-shadow: 0 16px 48px -16px color-mix(in oklch, black 55%, transparent);
+  }
+
+  @supports (animation-timeline: scroll()) {
+    .dialog-input-scroll-fade {
+      animation: dialog-input-scroll-fade linear;
+      animation-timeline: scroll(self);
+      -webkit-mask-image: linear-gradient(
+        to bottom,
+        transparent,
+        #000 var(--dialog-input-fade-top),
+        #000 calc(100% - var(--dialog-input-fade-bottom)),
+        transparent
+      );
+      mask-image: linear-gradient(
+        to bottom,
+        transparent,
+        #000 var(--dialog-input-fade-top),
+        #000 calc(100% - var(--dialog-input-fade-bottom)),
+        transparent
+      );
+    }
+  }
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+
+  html,
+  body,
+  #root {
+    @apply min-h-dvh;
+  }
+
+  #root {
+    @apply flex flex-col;
+  }
+
   body {
     @apply bg-background text-foreground;
+  }
+
+  a,
+  button:not(:disabled) {
+    cursor: pointer;
   }
 }
