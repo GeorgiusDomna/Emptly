@@ -1,0 +1,1 @@
+alert('poshel nahuy ot sudova')

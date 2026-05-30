@@ -2,14 +2,15 @@ import { lazy, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router';
 import App from './App';
-import ConnectRoom from './pages/ConnectRoom/ConnectRoom';
-import { LoadBar } from './components/LoadBar/LoadBar';
+import { LoadBar } from '@/shared/components/load-bar/LoadBar';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('not found root');
 
+const LazyHomePage = lazy(() => import('@/pages/HomePage/HomePage'));
 const LazyStartPage = lazy(() => import('@/pages/StartPage/StartPage'));
 const LazyRoom = lazy(() => import('@/pages/Room/Room'));
+const LazyConnectRoom = lazy(() => import('@/pages/ConnectRoom/ConnectRoom'));
 
 const router = createBrowserRouter([
   {
@@ -18,11 +19,15 @@ const router = createBrowserRouter([
     children: [
       {
         path: "/",
+        element: <Suspense fallback={<LoadBar />}><LazyHomePage /></Suspense>
+      },
+      {
+        path: "/create-room/",
         element: <Suspense fallback={<LoadBar />}><LazyStartPage /></Suspense>
       },
       {
         path: "/connect-room/",
-        element: <ConnectRoom />
+        element: <Suspense fallback={<LoadBar />}><LazyConnectRoom /></Suspense>
       },
       {
         path: "/room/:roomID/",

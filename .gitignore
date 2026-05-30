@@ -18,6 +18,7 @@ Thumbs.db
 # IDE / Editor
 .vscode/
 .idea/
+.cursor/
 *.suo
 *.ntvs*
 *.njsproj
@@ -47,12 +48,31 @@ client/storybook-static/
 # ======================
 server/build/
 server/dist/
+server/dist-test/
 server/.cache/
 server/coverage/
 server/node_modules/
+server/certs/*.pem
+
+# Legacy server artifacts (pre-MVP)
+server/FileService.js
+server/Post.js
+server/PostController.js
+server/PostService.js
+server/__dirname.js
+server/image.png
+server/index.js
+server/new/
+server/readme.txt
+server/router.js
+server/script.js
+server/static/
+server/styles.css
 
 # ======================
 # Optional / testing
 # ======================
 coverage/
 jest-cache/
+client/playwright-report/
+client/test-results/

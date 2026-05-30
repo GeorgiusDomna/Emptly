@@ -1,0 +1,33 @@
+{
+	"name": "private-chat-server",
+	"scripts": {
+		"build": "tsc -p tsconfig.json",
+		"build:test": "tsc -p tsconfig.test.json",
+		"start": "node dist/index.js",
+		"dev": "tsx watch src/index.ts",
+		"dev:secure": "TLS_CERT_PATH=./certs/dev-cert.pem TLS_KEY_PATH=./certs/dev-key.pem tsx watch src/index.ts",
+		"certs:dev": "node scripts/generate-dev-certs.mjs",
+		"typecheck": "tsc --noEmit -p tsconfig.json",
+		"lint": "eslint \"src/**/*.ts\"",
+		"test": "npm run build:test && node --test dist-test/tests/*.test.js",
+		"format": "prettier --check \"src/**/*.{ts,js,json,md}\""
+	},
+	"type": "module",
+	"dependencies": {
+		"cors": "^2.8.5",
+		"dotenv": "^17.2.3",
+		"ws": "^8.18.3",
+		"zod": "^4.1.12"
+	},
+	"devDependencies": {
+		"@eslint/js": "^9.39.1",
+		"@types/node": "^24.10.1",
+		"@types/ws": "^8.18.1",
+		"eslint": "^9.39.1",
+		"eslint-config-prettier": "^10.1.8",
+		"prettier": "^3.6.2",
+		"tsx": "^4.20.6",
+		"typescript": "^5.9.3",
+		"typescript-eslint": "^8.46.4"
+	}
+}
