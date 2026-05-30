@@ -2,7 +2,7 @@ FROM node:20-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
-COPY tsconfig.json webpack.config.ts postcss.config.js ./
+COPY tsconfig.json tsconfig.build.json webpack.config.ts postcss.config.js ./
 COPY src ./src
 RUN npm run build
 

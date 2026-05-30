@@ -62,8 +62,13 @@ export default (env: configProps): webpack.Configuration => {
             rules: [
                 {
                     test: /\.tsx?$/,
-                    use: 'ts-loader',
-                    exclude: /node_modules/,
+                    use: {
+                        loader: 'ts-loader',
+                        options: {
+                            configFile: path.resolve('tsconfig.build.json'),
+                        },
+                    },
+                    exclude: [/node_modules/, /\.test\.(ts|tsx)$/],
                 },
                 {
                     test: /\.css$/i,
