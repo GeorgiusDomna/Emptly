@@ -8,7 +8,9 @@ import { readServerConfig, type ServerConfig } from "./config/env.js";
 import { loadTlsOptions } from "./config/tls.js";
 import { RoomManager } from "./domain/rooms/room-manager.js";
 import { applyCorsHeaders, handleCorsPreflight } from "./http/cors.js";
+import { createLogger } from "./shared/logger.js";
 import { ConnectionRegistry } from "./ws/connection-registry.js";
+import { SocketRateLimiter } from "./ws/rate-limit.js";
 import {
 	PROTOCOL_VERSION,
 	buildErrorPayload,
@@ -25,28 +27,41 @@ export function createChatServer(config: ServerConfig): {
 	start: () => Promise<void>;
 	stop: () => Promise<void>;
 } {
+	const logger = createLogger(config.logLevel);
 	const roomManager = new RoomManager();
 	const connectionRegistry = new ConnectionRegistry();
+	const socketRateLimiter = new SocketRateLimiter(
+		config.rateLimitWindowMs,
+		config.rateLimitEventsPerWindow
+	);
+	const startedAtMs = Date.now();
+	let protocolErrorCount = 0;
+	let isShuttingDown = false;
 	const roomHandshakeStates = new Map<
 		string,
 		{ sessionId: string; finishedUserIds: Set<string>; readyAnnounced: boolean }
 	>();
 
 	const requestListener = (req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse) => {
-		const isHealthRoute = req.url === "/health" || req.url === "/ready";
+		const isHealthRoute = req.url === "/health";
+		const isReadyRoute = req.url === "/ready";
 
-		if (isHealthRoute) {
+		if (isHealthRoute || isReadyRoute) {
 			if (handleCorsPreflight(req, res, config.corsOrigin)) {
 				return;
 			}
 
 			applyCorsHeaders(req, res, config.corsOrigin);
 
-			res.writeHead(200, { "content-type": "application/json" });
+			const statusCode = isReadyRoute && isShuttingDown ? 503 : 200;
+			res.writeHead(statusCode, { "content-type": "application/json" });
 			res.end(
 				JSON.stringify({
-					status: "ok",
-					protocolVersion: PROTOCOL_VERSION
+					status: isReadyRoute ? (isShuttingDown ? "draining" : "ready") : "ok",
+					protocolVersion: PROTOCOL_VERSION,
+					uptimeSec: Math.floor((Date.now() - startedAtMs) / 1000),
+					activeConnections: countActiveConnections(),
+					errorCount: protocolErrorCount
 				})
 			);
 			return;
@@ -75,6 +90,7 @@ export function createChatServer(config: ServerConfig): {
 
 	wss.on("connection", (socket: WebSocket) => {
 		connectionRegistry.create(socket);
+		logger.info("ws_connection_opened", { activeConnections: countActiveConnections() });
 
 		socket.on("pong", () => {
 			connectionRegistry.setAlive(socket, true);
@@ -117,15 +133,21 @@ export function createChatServer(config: ServerConfig): {
 	}, Math.min(config.heartbeatIntervalMs, 10000));
 
 	function handleInboundMessage(rawMessage: RawData, socket: WebSocket): void {
+		if (!socketRateLimiter.consume(socket, Date.now())) {
+			sendProtocolError(socket, "RATE_LIMITED", "Too many events per time window");
+			logger.warn("ws_rate_limited", { activeConnections: countActiveConnections() });
+			return;
+		}
+
 		const rawText = normalizeRawMessage(rawMessage);
 		if (Buffer.byteLength(rawText, "utf8") > config.maxMessageBytes) {
-			sendJson(socket, buildErrorPayload("INVALID_PAYLOAD", "Payload too large"));
+			sendProtocolError(socket, "INVALID_PAYLOAD", "Payload too large");
 			return;
 		}
 
 		const parsedPayload = parseJson(rawText);
 		if (!parsedPayload) {
-			sendJson(socket, buildErrorPayload("INVALID_PAYLOAD", "Invalid JSON"));
+			sendProtocolError(socket, "INVALID_PAYLOAD", "Invalid JSON");
 			return;
 		}
 
@@ -139,12 +161,10 @@ export function createChatServer(config: ServerConfig): {
 				eventType !== "chat_message" &&
 				eventType !== "handshake_hello" &&
 				eventType !== "handshake_finish";
-			sendJson(
+			sendProtocolError(
 				socket,
-				buildErrorPayload(
-					isUnknownType ? "UNKNOWN_EVENT" : "INVALID_PAYLOAD",
-					"Event payload validation failed"
-				)
+				isUnknownType ? "UNKNOWN_EVENT" : "INVALID_PAYLOAD",
+				"Event payload validation failed"
 			);
 			return;
 		}
@@ -196,12 +216,12 @@ export function createChatServer(config: ServerConfig): {
 			case "handshake_hello": {
 				const meta = connectionRegistry.get(socket);
 				if (!meta || meta.roomId !== event.roomId || meta.userId !== event.userId) {
-					sendJson(socket, buildErrorPayload("ROOM_MISMATCH", "roomId or userId mismatch"));
+					sendProtocolError(socket, "ROOM_MISMATCH", "roomId or userId mismatch");
 					return;
 				}
 				const handshakeState = getOrCreateRoomHandshake(event.roomId);
 				if (event.handshakeSessionId !== handshakeState.sessionId) {
-					sendJson(socket, buildErrorPayload("HANDSHAKE_INVALID", "Handshake session expired"));
+					sendProtocolError(socket, "HANDSHAKE_INVALID", "Handshake session expired");
 					return;
 				}
 				broadcastToRoom(event.roomId, socket, {
@@ -219,18 +239,22 @@ export function createChatServer(config: ServerConfig): {
 			case "handshake_finish": {
 				const meta = connectionRegistry.get(socket);
 				if (!meta || meta.roomId !== event.roomId || meta.userId !== event.userId) {
-					sendJson(socket, buildErrorPayload("ROOM_MISMATCH", "roomId or userId mismatch"));
+					sendProtocolError(socket, "ROOM_MISMATCH", "roomId or userId mismatch");
 					return;
 				}
 
 				const state = getOrCreateRoomHandshake(event.roomId);
 				if (event.handshakeSessionId !== state.sessionId) {
-					sendJson(socket, buildErrorPayload("HANDSHAKE_INVALID", "Handshake session expired"));
+					sendProtocolError(socket, "HANDSHAKE_INVALID", "Handshake session expired");
 					return;
 				}
 				const participantUserIds = getRoomUserIds(event.roomId);
 				if (participantUserIds.length !== 2 || !participantUserIds.includes(event.userId)) {
-					sendJson(socket, buildErrorPayload("HANDSHAKE_INVALID", "Handshake requires exactly two participants"));
+					sendProtocolError(
+						socket,
+						"HANDSHAKE_INVALID",
+						"Handshake requires exactly two participants"
+					);
 					return;
 				}
 
@@ -261,13 +285,14 @@ export function createChatServer(config: ServerConfig): {
 			case "chat_message": {
 				const meta = connectionRegistry.get(socket);
 				if (!meta || meta.roomId !== event.roomId || meta.userId !== event.userId) {
-					sendJson(socket, buildErrorPayload("ROOM_MISMATCH", "roomId or userId mismatch"));
+					sendProtocolError(socket, "ROOM_MISMATCH", "roomId or userId mismatch");
 					return;
 				}
 				if (!isRoomHandshakeReady(event.roomId, event.userId)) {
-					sendJson(
+					sendProtocolError(
 						socket,
-						buildErrorPayload("HANDSHAKE_REQUIRED", "Complete secure handshake before sending messages")
+						"HANDSHAKE_REQUIRED",
+						"Complete secure handshake before sending messages"
 					);
 					return;
 				}
@@ -289,7 +314,7 @@ export function createChatServer(config: ServerConfig): {
 			case "leave_room": {
 				const meta = connectionRegistry.get(socket);
 				if (!meta || meta.roomId !== event.roomId || meta.userId !== event.userId) {
-					sendJson(socket, buildErrorPayload("ROOM_MISMATCH", "roomId or userId mismatch"));
+					sendProtocolError(socket, "ROOM_MISMATCH", "roomId or userId mismatch");
 					return;
 				}
 
@@ -324,7 +349,9 @@ export function createChatServer(config: ServerConfig): {
 				});
 			}
 		}
+		socketRateLimiter.clear(socket);
 		connectionRegistry.delete(socket);
+		logger.info("ws_connection_closed", { activeConnections: countActiveConnections() });
 	}
 
 	function broadcastToRoom(roomId: string, skipSocket: WebSocket | null, payload: object): void {
@@ -379,14 +406,29 @@ export function createChatServer(config: ServerConfig): {
 		return roomUsers.every((id) => state.finishedUserIds.has(id));
 	}
 
+	function sendProtocolError(
+		socket: WebSocket,
+		code: Parameters<typeof buildErrorPayload>[0],
+		message: string
+	): void {
+		protocolErrorCount += 1;
+		sendJson(socket, buildErrorPayload(code, message));
+	}
+
+	function countActiveConnections(): number {
+		return Array.from(connectionRegistry.entries()).length;
+	}
+
 	return {
 		httpServer,
 		start: async () =>
 			new Promise((resolve) => {
+				isShuttingDown = false;
 				httpServer.listen(config.port, () => resolve());
 			}),
 		stop: async () =>
 			new Promise((resolve, reject) => {
+				isShuttingDown = true;
 				clearInterval(heartbeatTimer);
 				clearInterval(roomTtlTimer);
 				wss.close((error) => {
@@ -408,10 +450,20 @@ export function createChatServer(config: ServerConfig): {
 
 async function bootstrap(): Promise<void> {
 	const config = readServerConfig(process.env);
+	const logger = createLogger(config.logLevel);
+	process.on("uncaughtException", (error) => {
+		logger.error("uncaught_exception", { error: error.message, stack: error.stack });
+	});
+	process.on("unhandledRejection", (reason) => {
+		const errorText = reason instanceof Error ? reason.message : String(reason);
+		const stack = reason instanceof Error ? reason.stack : undefined;
+		logger.error("unhandled_rejection", { error: errorText, stack });
+	});
+
 	const chatServer = createChatServer(config);
 	await chatServer.start();
 	const scheme = config.tls ? "https/wss" : "http/ws";
-	console.log(`${scheme} server started on port ${config.port}`);
+	logger.info("chat_server_started", { scheme, port: config.port, protocolVersion: PROTOCOL_VERSION });
 }
 
 const entrypoint = process.argv[1] ? pathToFileURL(process.argv[1]).href : "";

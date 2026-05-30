@@ -59,6 +59,7 @@ export type OutboundErrorCode =
 	| "ROOM_MISMATCH"
 	| "HANDSHAKE_REQUIRED"
 	| "HANDSHAKE_INVALID"
+	| "RATE_LIMITED"
 	| "ROOM_FULL"
 	| "INTERNAL_ERROR";
 

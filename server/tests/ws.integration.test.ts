@@ -13,6 +13,9 @@ test("ws flow: join, message, full room, leave", async () => {
 		heartbeatIntervalMs: 30_000,
 		roomIdleTtlMs: 60_000,
 		corsOrigin: null,
+		rateLimitWindowMs: 10_000,
+		rateLimitEventsPerWindow: 120,
+		logLevel: "error",
 		tls: null
 	});
 	await chatServer.start();
@@ -110,6 +113,9 @@ test("ws protocol errors: invalid json, unknown event, room mismatch", async () 
 		heartbeatIntervalMs: 30_000,
 		roomIdleTtlMs: 60_000,
 		corsOrigin: null,
+		rateLimitWindowMs: 10_000,
+		rateLimitEventsPerWindow: 120,
+		logLevel: "error",
 		tls: null
 	});
 	await chatServer.start();
@@ -173,6 +179,9 @@ test("ws requires handshake before chat message", async () => {
 		heartbeatIntervalMs: 30_000,
 		roomIdleTtlMs: 60_000,
 		corsOrigin: null,
+		rateLimitWindowMs: 10_000,
+		rateLimitEventsPerWindow: 120,
+		logLevel: "error",
 		tls: null
 	});
 	await chatServer.start();
@@ -210,6 +219,45 @@ test("ws requires handshake before chat message", async () => {
 	await chatServer.stop();
 });
 
+test("ws rate limits noisy clients", async () => {
+	const chatServer = createChatServer({
+		port: 0,
+		maxMessageBytes: 4096,
+		heartbeatIntervalMs: 30_000,
+		roomIdleTtlMs: 60_000,
+		corsOrigin: null,
+		rateLimitWindowMs: 1_000,
+		rateLimitEventsPerWindow: 3,
+		logLevel: "error",
+		tls: null
+	});
+	await chatServer.start();
+
+	const address = chatServer.httpServer.address();
+	assert.ok(address && typeof address !== "string");
+	const wsUrl = `ws://127.0.0.1:${address.port}/ws`;
+
+	const ws = await openSocket(wsUrl);
+	const joinPayload = JSON.stringify({
+		type: "join_room",
+		roomId: "rate-limit-room",
+		userId: "spam-user",
+		protocolVersion: PROTOCOL_VERSION
+	});
+	ws.send(joinPayload);
+	await waitForEvent(ws, "room_joined");
+	ws.send(joinPayload);
+	ws.send(joinPayload);
+	ws.send(joinPayload);
+
+	const limited = await waitForEvent(ws, "error");
+	assert.equal(limited.code, "RATE_LIMITED");
+	assert.equal(limited.protocolVersion, PROTOCOL_VERSION);
+
+	ws.close();
+	await chatServer.stop();
+});
+
 test("health endpoint does not expose global room metadata", async () => {
 	const chatServer = createChatServer({
 		port: 0,
@@ -217,6 +265,9 @@ test("health endpoint does not expose global room metadata", async () => {
 		heartbeatIntervalMs: 30_000,
 		roomIdleTtlMs: 60_000,
 		corsOrigin: null,
+		rateLimitWindowMs: 10_000,
+		rateLimitEventsPerWindow: 120,
+		logLevel: "error",
 		tls: null
 	});
 	await chatServer.start();

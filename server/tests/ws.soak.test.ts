@@ -13,6 +13,9 @@ test("ws soak: repeated join/leave cycles keep server stable", async () => {
 		heartbeatIntervalMs: 30_000,
 		roomIdleTtlMs: 60_000,
 		corsOrigin: null,
+		rateLimitWindowMs: 10_000,
+		rateLimitEventsPerWindow: 1000,
+		logLevel: "error",
 		tls: null
 	});
 	await chatServer.start();
