@@ -3,12 +3,14 @@ import { Outlet } from 'react-router-dom';
 
 import './globals.css';
 import './main.sass';
+import { NavBar } from './layout/Header/Header';
 
 const App = () => {
 
     return (
         <main className='main_container'>
-            <Outlet/>
+            <NavBar />
+            <Outlet />
         </main>
     )
 }

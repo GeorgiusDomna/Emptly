@@ -1,0 +1,21 @@
+{
+	"scripts": {
+		"start": "node new/index.js",
+		"dev": "nodemon new/index.js"
+	},
+	"type": "module",
+	"dependencies": {
+		"cors": "^2.8.5",
+		"cross-env": "^10.1.0",
+		"dotenv": "^17.2.3",
+		"express": "^5.1.0",
+		"express-fileupload": "^1.5.2",
+		"mongoose": "^8.19.3",
+		"underscore": "^1.13.7",
+		"uuid": "^13.0.0",
+		"ws": "^8.18.3"
+	},
+	"devDependencies": {
+		"nodemon": "^3.1.11"
+	}
+}

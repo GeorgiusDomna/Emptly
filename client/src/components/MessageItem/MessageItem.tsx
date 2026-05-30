@@ -14,7 +14,7 @@ export const MessageItem = ({ data, index, style }: RowComponentProps<MessageIte
     const { owner, text, time, isOwner } = message;
 
     let marginTop = 10;
-    if (prevMessage && prevMessage.owner.name === owner.name) {
+    if (prevMessage && prevMessage?.owner?.name === owner?.name) {
         marginTop = 5;
     }
 

@@ -1,10 +1,9 @@
-import { messageList } from "@/dataBase/massegeList";
-import { DialogInput } from "@/components/DialogInput/DialogInput";
-import { MessageItem } from "@/components/MessageItem/MessageItem";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-
-
-import { List, useDynamicRowHeight } from "react-window";
+import { MessageList } from "@/components/MessageList/MessageList";
+import { DialogInput } from "@/components/DialogInput/DialogInput";
+// import { messageList } from "@/dataBase/massegeList";
+import './room.sass';
 
 export type Owner = {
     avatar: string;
@@ -20,22 +19,61 @@ export type MessageDate = {
 
 const Room = () => {
     const { roomID } = useParams();
+    const [connected, setConnected] = useState(false);
+    const [messagesList, setMessagesList] = useState([]);
+    const [message, setMessage] = useState('');
 
-    const rowHeight = useDynamicRowHeight({
-        defaultRowHeight: 57.33
-    });
+    const socket = useRef<WebSocket>(null);
+
+    useEffect(() => {
+        console.log(messagesList)
+    }, [messagesList])
+    
+    useEffect(() => {
+        socket.current = new WebSocket('ws://localhost:5001');
+
+        socket.current.onopen = () => {
+            setConnected(true);
+            const message = {
+                event: 'connaction',
+                id: Date.now(),
+                username: 'Adam'
+            };
+            socket.current.send(JSON.stringify(message));
+        }
+
+        socket.current.onmessage = (event) => {
+            const message = JSON.parse(event.data);
+            setMessagesList(prev => [...prev, message]);
+        }
+
+        socket.current.onclose = () => {
+            console.log('Socket - close');
+        }
+
+        socket.current.onerror = () => {
+            console.log('Socket - error');
+        }
+    }, [])
+
+    const handleSubmit = async () => {
+        const body = {
+            username: 'Adam',
+            id: Date.now(),
+            event: 'message',
+            text: message
+        }
+        socket.current.send(JSON.stringify(body));
+    };
 
     return (
         <div className="room_container">
-            <List
-                className="room_content_container"
-                rowComponent={MessageItem}
-                rowCount={messageList.length}
-                rowHeight={rowHeight}
-                rowProps={{ data: messageList }}
-                
+            <MessageList list={messagesList} />
+            <DialogInput 
+                value={message} 
+                onChange={setMessage} 
+                onSubmit={handleSubmit} 
             />
-            <DialogInput />
         </div>
     )
 }
