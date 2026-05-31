@@ -1,12 +1,27 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
+export function parseAllowedOrigins(corsOrigin: string | null): string[] {
+	if (!corsOrigin) {
+		return [];
+	}
+
+	return corsOrigin
+		.split(",")
+		.map((origin) => origin.trim())
+		.filter(Boolean);
+}
+
+export function isOriginAllowed(origin: string, corsOrigin: string | null): boolean {
+	return parseAllowedOrigins(corsOrigin).includes(origin);
+}
+
 export function applyCorsHeaders(
 	req: IncomingMessage,
 	res: ServerResponse,
 	corsOrigin: string | null
 ): boolean {
 	const origin = req.headers.origin;
-	if (!origin || !corsOrigin || origin !== corsOrigin) {
+	if (!origin || !isOriginAllowed(origin, corsOrigin)) {
 		return false;
 	}
 

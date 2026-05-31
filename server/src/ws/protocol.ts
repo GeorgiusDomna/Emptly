@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const PROTOCOL_VERSION = "1.3";
+export const PROTOCOL_VERSION = "1.4";
 
 const baseMessageSchema = z.object({
 	type: z.string().min(1),
@@ -38,12 +38,18 @@ export const handshakeFinishSchema = baseMessageSchema.extend({
 	confirmation: z.string().min(1)
 });
 
+export const typingActivitySchema = baseMessageSchema.extend({
+	type: z.literal("typing_activity"),
+	active: z.boolean()
+});
+
 export const inboundEventSchema = z.discriminatedUnion("type", [
 	joinRoomSchema,
 	leaveRoomSchema,
 	chatMessageSchema,
 	handshakeHelloSchema,
-	handshakeFinishSchema
+	handshakeFinishSchema,
+	typingActivitySchema
 ]);
 
 export type JoinRoomEvent = z.infer<typeof joinRoomSchema>;
@@ -51,6 +57,7 @@ export type LeaveRoomEvent = z.infer<typeof leaveRoomSchema>;
 export type ChatMessageEvent = z.infer<typeof chatMessageSchema>;
 export type HandshakeHelloEvent = z.infer<typeof handshakeHelloSchema>;
 export type HandshakeFinishEvent = z.infer<typeof handshakeFinishSchema>;
+export type TypingActivityEvent = z.infer<typeof typingActivitySchema>;
 export type InboundEvent = z.infer<typeof inboundEventSchema>;
 
 export type OutboundErrorCode =

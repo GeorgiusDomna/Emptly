@@ -4,7 +4,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { WebSocket } from "ws";
 import { createChatServer } from "../src/index.js";
 
-const PROTOCOL_VERSION = "1.3";
+const PROTOCOL_VERSION = "1.4";
 
 test("ws soak: repeated join/leave cycles keep server stable", async () => {
 	const chatServer = createChatServer({
