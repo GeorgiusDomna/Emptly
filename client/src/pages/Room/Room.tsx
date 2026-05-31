@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { setChatComposerOffsetPx } from "@/lib/chat-composer";
 import { MessageList } from "@/shared/components/message-list/MessageList";
+import { TypingIndicator } from "@/shared/components/message-list/TypingIndicator";
 import { DialogInput } from "@/shared/components/dialog-input/DialogInput";
 import { useParams } from "react-router-dom";
 import {
@@ -52,6 +53,8 @@ const Room = () => {
 		errorText,
 		messages,
 		sendMessage,
+		notifyComposerActivity,
+		peerIsTyping,
 		participants,
 		reconnect,
 		preferredTransport,
@@ -65,6 +68,10 @@ const Room = () => {
 		Boolean(validRoomId && roomKey)
 	);
 	const { setRoomConnection } = useConnectionStatusContext();
+
+	useEffect(() => {
+		setComposerOffsetRevision((revision) => revision + 1);
+	}, [peerIsTyping]);
 
 	useEffect(() => {
 		if (!validRoomId) {
@@ -109,6 +116,10 @@ const Room = () => {
 
 	const canSend = status === "connected" || status === "waiting_peer";
 
+	useEffect(() => {
+		notifyComposerActivity(text);
+	}, [text, notifyComposerActivity]);
+
 	const handleSubmit = () => {
 		sendMessage(text);
 		setText("");
@@ -150,7 +161,8 @@ const Room = () => {
 				ref={composerDockRef}
 				className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center bg-gradient-to-t from-background/75 from-25% via-background/35 to-transparent px-4 pb-4 pt-10 sm:px-6 sm:pb-6"
 			>
-				<div className="pointer-events-auto w-full max-w-4xl">
+				<div className="pointer-events-auto w-full max-w-4xl space-y-2">
+					{peerIsTyping ? <TypingIndicator /> : null}
 					<DialogInput value={text} onChange={setText} onSubmit={handleSubmit} disabled={!canSend} />
 				</div>
 			</div>

@@ -176,6 +176,23 @@ function SessionStepIcon({ state }: { state: SessionStepState }) {
 	}
 }
 
+function StatusDot({
+	tone,
+	pulse,
+	className
+}: {
+	tone: StatusDotTone;
+	pulse: boolean;
+	className?: string;
+}) {
+	return (
+		<span
+			aria-hidden
+			className={cn("rounded-full", dotToneClasses(tone), pulse && "animate-pulse", className)}
+		/>
+	);
+}
+
 export function RealtimeStatusBadge() {
 	const roomConnection = useRoomConnection();
 	const draftRoom = useDraftRoom();
@@ -210,15 +227,12 @@ export function RealtimeStatusBadge() {
 			<PopoverTrigger asChild>
 				<button
 					type="button"
-					className="hidden cursor-pointer items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-accent-foreground sm:inline-flex"
+					className="h-[26px] inline-flex cursor-pointer items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-accent-foreground"
 					aria-label="Статус realtime-сервера"
 				>
 					<PlugZap className="size-3.5" />
-					Realtime
-					<span
-						aria-hidden
-						className={cn("size-1.5 rounded-full", dotToneClasses(dot.tone), dot.pulse && "animate-pulse")}
-					/>
+					<span className="hidden sm:inline">Realtime</span>
+					<StatusDot tone={dot.tone} pulse={dot.pulse} className="size-1.5" />
 				</button>
 			</PopoverTrigger>
 			<PopoverContent align="end" className="space-y-3">

@@ -1,4 +1,4 @@
-export const PROTOCOL_VERSION = "1.3";
+export const PROTOCOL_VERSION = "1.4";
 
 export type WebSocketTransport = "ws" | "wss";
 
@@ -47,10 +47,31 @@ export function resolveWebSocketTransport(): WebSocketTransport {
 	}
 }
 
+function deriveHealthUrlFromWebSocketUrl(wsUrl: string): string | null {
+	try {
+		const parsed = new URL(wsUrl);
+		parsed.protocol = parsed.protocol === "wss:" ? "https:" : "http:";
+		parsed.pathname = "/health";
+		parsed.search = "";
+		parsed.hash = "";
+		return parsed.toString();
+	} catch {
+		return null;
+	}
+}
+
 export function resolveHealthUrl(): string {
 	const explicit = trimEnvUrl(process.env.VITE_HEALTH_URL);
 	if (explicit) {
 		return explicit;
+	}
+
+	const wsUrl = trimEnvUrl(process.env.VITE_WS_URL);
+	if (wsUrl) {
+		const derived = deriveHealthUrlFromWebSocketUrl(wsUrl);
+		if (derived) {
+			return derived;
+		}
 	}
 
 	const protocol = window.location.protocol === "https:" ? "https" : "http";
