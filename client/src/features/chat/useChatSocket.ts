@@ -88,6 +88,13 @@ type ServerEvent =
 			protocolVersion: string;
 	  }
 	| {
+			type: "peer_typing";
+			roomId: string;
+			userId: string;
+			active: boolean;
+			protocolVersion: string;
+	  }
+	| {
 			type: "room_full";
 			roomId: string;
 			code: "ROOM_FULL";
@@ -107,6 +114,8 @@ type UseChatSocketResult = {
 	errorText: string | null;
 	messages: ChatViewMessage[];
 	sendMessage: (text: string) => void;
+	notifyComposerActivity: (draft: string) => void;
+	peerIsTyping: boolean;
 	participants: number;
 	reconnect: () => void;
 	preferredTransport: WebSocketTransportMode;
@@ -116,6 +125,8 @@ type UseChatSocketResult = {
 };
 
 const RECONNECT_DELAY_MS = 1200;
+const TYPING_IDLE_MS = 2_500;
+const PEER_TYPING_TIMEOUT_MS = 4_000;
 
 function disposeSocket(socket: WebSocket): void {
 	socket.onopen = null;
@@ -180,6 +191,10 @@ export function useChatSocket(
 	const [activeWsUrl, setActiveWsUrl] = useState<string | null>(null);
 	const [transportFallbackActive, setTransportFallbackActive] = useState(false);
 	const [transportStatusHint, setTransportStatusHint] = useState<string | null>(null);
+	const [peerIsTyping, setPeerIsTyping] = useState(false);
+	const localTypingActiveRef = useRef(false);
+	const typingIdleTimerRef = useRef<number | null>(null);
+	const peerTypingTimeoutRef = useRef<number | null>(null);
 	const preferredTransport = useMemo(() => getPreferredWebSocketTransport(), []);
 
 	const resetTransportState = useCallback(() => {
@@ -264,6 +279,14 @@ export function useChatSocket(
 			})
 		);
 	}, [preferredTransport, scheduleReconnect]);
+
+	const sendSocketPayload = useCallback((payload: Record<string, unknown>) => {
+		const socket = socketRef.current;
+		if (!socket || socket.readyState !== WebSocket.OPEN) {
+			return;
+		}
+		socket.send(JSON.stringify(payload));
+	}, []);
 
 	const connect = useCallback(() => {
 		if (manualCloseRef.current) {
@@ -395,6 +418,14 @@ export function useChatSocket(
 					return;
 				case "new_message":
 					{
+						if (payload.userId !== userId) {
+							if (peerTypingTimeoutRef.current !== null) {
+								window.clearTimeout(peerTypingTimeoutRef.current);
+								peerTypingTimeoutRef.current = null;
+							}
+							setPeerIsTyping(false);
+						}
+
 						const key = roomCryptoKeyRef.current;
 						if (!key) {
 							setStatus("failed");
@@ -436,6 +467,11 @@ export function useChatSocket(
 					setHandshakeText(null);
 					handshakeSessionIdRef.current = null;
 					resetHandshakeState();
+					if (peerTypingTimeoutRef.current !== null) {
+						window.clearTimeout(peerTypingTimeoutRef.current);
+						peerTypingTimeoutRef.current = null;
+					}
+					setPeerIsTyping(false);
 					setMessages((prev) => [
 						...prev,
 						{
@@ -447,6 +483,22 @@ export function useChatSocket(
 							kind: "system"
 						}
 					]);
+					return;
+				case "peer_typing":
+					if (payload.userId === userId) {
+						return;
+					}
+					if (peerTypingTimeoutRef.current !== null) {
+						window.clearTimeout(peerTypingTimeoutRef.current);
+						peerTypingTimeoutRef.current = null;
+					}
+					setPeerIsTyping(payload.active);
+					if (payload.active) {
+						peerTypingTimeoutRef.current = window.setTimeout(() => {
+							setPeerIsTyping(false);
+							peerTypingTimeoutRef.current = null;
+						}, PEER_TYPING_TIMEOUT_MS);
+					}
 					return;
 				case "room_full":
 					setStatus("room_full");
@@ -482,7 +534,7 @@ export function useChatSocket(
 				return;
 			}
 		};
-	}, [handleConnectFailure, preferredTransport, roomId, roomKey, userId]);
+	}, [handleConnectFailure, preferredTransport, roomId, roomKey, sendSocketPayload, userId]);
 
 	connectRef.current = connect;
 
@@ -540,6 +592,14 @@ export function useChatSocket(
 			manualCloseRef.current = true;
 			handshakeSessionIdRef.current = null;
 			resetHandshakeState();
+			if (typingIdleTimerRef.current !== null) {
+				window.clearTimeout(typingIdleTimerRef.current);
+				typingIdleTimerRef.current = null;
+			}
+			if (peerTypingTimeoutRef.current !== null) {
+				window.clearTimeout(peerTypingTimeoutRef.current);
+				peerTypingTimeoutRef.current = null;
+			}
 			if (reconnectTimerRef.current !== null) {
 				window.clearTimeout(reconnectTimerRef.current);
 				reconnectTimerRef.current = null;
@@ -548,6 +608,18 @@ export function useChatSocket(
 			const socket = socketRef.current;
 			if (socket) {
 				if (socket.readyState === WebSocket.OPEN) {
+					if (localTypingActiveRef.current) {
+						socket.send(
+							JSON.stringify({
+								type: "typing_activity",
+								roomId,
+								userId,
+								active: false,
+								protocolVersion: PROTOCOL_VERSION
+							})
+						);
+						localTypingActiveRef.current = false;
+					}
 					socket.send(
 						JSON.stringify({
 							type: "leave_room",
@@ -562,6 +634,24 @@ export function useChatSocket(
 			}
 		};
 	}, [enabled, resetTransportState, roomId, roomKey, userId]);
+
+	const sendTypingActivity = useCallback(
+		(active: boolean) => {
+			if (localTypingActiveRef.current === active) {
+				return;
+			}
+
+			localTypingActiveRef.current = active;
+			sendSocketPayload({
+				type: "typing_activity",
+				roomId,
+				userId,
+				active,
+				protocolVersion: PROTOCOL_VERSION
+			});
+		},
+		[roomId, sendSocketPayload, userId]
+	);
 
 	const sendMessage = useCallback(
 		(text: string) => {
@@ -583,6 +673,12 @@ export function useChatSocket(
 
 			void encryptMessage(trimmed, key)
 				.then(({ ciphertext, iv }) => {
+					if (typingIdleTimerRef.current !== null) {
+						window.clearTimeout(typingIdleTimerRef.current);
+						typingIdleTimerRef.current = null;
+					}
+					sendTypingActivity(false);
+
 					sendSocketPayload({
 						type: "chat_message",
 						roomId,
@@ -598,7 +694,35 @@ export function useChatSocket(
 					setErrorText("Не удалось зашифровать сообщение.");
 				});
 		},
-		[roomId, status, userId]
+		[roomId, sendSocketPayload, sendTypingActivity, status, userId]
+	);
+
+	const notifyComposerActivity = useCallback(
+		(draft: string) => {
+			const canNotify = status === "connected" || status === "waiting_peer";
+			if (!canNotify) {
+				return;
+			}
+
+			const isActive = draft.trim().length > 0;
+
+			if (typingIdleTimerRef.current !== null) {
+				window.clearTimeout(typingIdleTimerRef.current);
+				typingIdleTimerRef.current = null;
+			}
+
+			if (isActive) {
+				sendTypingActivity(true);
+				typingIdleTimerRef.current = window.setTimeout(() => {
+					sendTypingActivity(false);
+					typingIdleTimerRef.current = null;
+				}, TYPING_IDLE_MS);
+				return;
+			}
+
+			sendTypingActivity(false);
+		},
+		[sendTypingActivity, status]
 	);
 
 	const statusText = useMemo(() => {
@@ -624,6 +748,8 @@ export function useChatSocket(
 		errorText,
 		messages,
 		sendMessage,
+		notifyComposerActivity,
+		peerIsTyping,
 		participants,
 		reconnect,
 		preferredTransport,
@@ -631,14 +757,6 @@ export function useChatSocket(
 		activeWsUrl,
 		transportFallbackActive
 	};
-
-	function sendSocketPayload(payload: Record<string, unknown>): void {
-		const socket = socketRef.current;
-		if (!socket || socket.readyState !== WebSocket.OPEN) {
-			return;
-		}
-		socket.send(JSON.stringify(payload));
-	}
 
 	async function ensureHandshakeHello(participantsCount: number): Promise<void> {
 		if (!roomKey) {

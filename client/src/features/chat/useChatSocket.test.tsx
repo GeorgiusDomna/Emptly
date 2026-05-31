@@ -107,7 +107,7 @@ describe("useChatSocket", () => {
 				userId: "u1",
 				participants: 1,
 				handshakeSessionId: "session-1",
-				protocolVersion: "1.3"
+				protocolVersion: "1.4"
 			});
 		});
 
@@ -134,7 +134,7 @@ describe("useChatSocket", () => {
 				roomId,
 				code: "ROOM_FULL",
 				message: "Комната уже занята двумя пользователями",
-				protocolVersion: "1.3"
+				protocolVersion: "1.4"
 			});
 		});
 

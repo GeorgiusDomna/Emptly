@@ -160,7 +160,8 @@ export function createChatServer(config: ServerConfig): {
 				eventType !== "leave_room" &&
 				eventType !== "chat_message" &&
 				eventType !== "handshake_hello" &&
-				eventType !== "handshake_finish";
+				eventType !== "handshake_finish" &&
+				eventType !== "typing_activity";
 			sendProtocolError(
 				socket,
 				isUnknownType ? "UNKNOWN_EVENT" : "INVALID_PAYLOAD",
@@ -330,6 +331,23 @@ export function createChatServer(config: ServerConfig): {
 						protocolVersion: PROTOCOL_VERSION
 					});
 				}
+				return;
+			}
+
+			case "typing_activity": {
+				const meta = connectionRegistry.get(socket);
+				if (!meta || meta.roomId !== event.roomId || meta.userId !== event.userId) {
+					sendProtocolError(socket, "ROOM_MISMATCH", "roomId or userId mismatch");
+					return;
+				}
+
+				broadcastToRoom(event.roomId, socket, {
+					type: "peer_typing",
+					roomId: event.roomId,
+					userId: event.userId,
+					active: event.active,
+					protocolVersion: PROTOCOL_VERSION
+				});
 			}
 		}
 	}

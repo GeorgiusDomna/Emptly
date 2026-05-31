@@ -4,7 +4,7 @@ import { WebSocket } from "ws";
 import { createChatServer } from "../src/index.js";
 
 type AnyEvent = Record<string, unknown> & { type: string };
-const PROTOCOL_VERSION = "1.3";
+const PROTOCOL_VERSION = "1.4";
 
 test("ws flow: join, message, full room, leave", async () => {
 	const chatServer = createChatServer({
@@ -302,6 +302,83 @@ test("health endpoint does not expose global room metadata", async () => {
 	assert.equal(JSON.stringify(payload).includes("private-room-id"), false);
 
 	socket.close();
+	await chatServer.stop();
+});
+
+test("ws typing activity is relayed to peer but not to sender", async () => {
+	const chatServer = createChatServer({
+		port: 0,
+		maxMessageBytes: 4096,
+		heartbeatIntervalMs: 30_000,
+		roomIdleTtlMs: 60_000,
+		corsOrigin: null,
+		rateLimitWindowMs: 10_000,
+		rateLimitEventsPerWindow: 120,
+		logLevel: "error",
+		tls: null
+	});
+	await chatServer.start();
+
+	const address = chatServer.httpServer.address();
+	assert.ok(address && typeof address !== "string");
+	const wsUrl = `ws://127.0.0.1:${address.port}/ws`;
+
+	const a = await openSocket(wsUrl);
+	const b = await openSocket(wsUrl);
+
+	a.send(
+		JSON.stringify({
+			type: "join_room",
+			roomId: "room-typing",
+			userId: "u1",
+			protocolVersion: PROTOCOL_VERSION
+		})
+	);
+	await waitForEvent(a, "room_joined");
+
+	b.send(
+		JSON.stringify({
+			type: "join_room",
+			roomId: "room-typing",
+			userId: "u2",
+			protocolVersion: PROTOCOL_VERSION
+		})
+	);
+	await waitForEvent(b, "room_joined");
+	await waitForEvent(a, "peer_joined");
+
+	a.send(
+		JSON.stringify({
+			type: "typing_activity",
+			roomId: "room-typing",
+			userId: "u1",
+			active: true,
+			protocolVersion: PROTOCOL_VERSION
+		})
+	);
+
+	const peerTyping = await waitForEvent(b, "peer_typing");
+	assert.equal(peerTyping.userId, "u1");
+	assert.equal(peerTyping.active, true);
+	assert.equal(peerTyping.roomId, "room-typing");
+	assert.equal(peerTyping.protocolVersion, PROTOCOL_VERSION);
+
+	a.send(
+		JSON.stringify({
+			type: "typing_activity",
+			roomId: "room-typing",
+			userId: "u1",
+			active: false,
+			protocolVersion: PROTOCOL_VERSION
+		})
+	);
+
+	const peerStoppedTyping = await waitForEvent(b, "peer_typing");
+	assert.equal(peerStoppedTyping.userId, "u1");
+	assert.equal(peerStoppedTyping.active, false);
+
+	a.close();
+	b.close();
 	await chatServer.stop();
 });
 

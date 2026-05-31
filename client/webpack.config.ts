@@ -43,7 +43,7 @@ export default (env: configProps): webpack.Configuration => {
     const isDev = env.mode === 'development';
     const devtool: webpack.Configuration['devtool'] = isDev ? 'inline-source-map' : false;
     const clientEnv = loadClientEnv();
-    const backendPort = process.env.BACKEND_PORT ?? clientEnv.BACKEND_PORT ?? '5001';
+    const backendPort = process.env.BACKEND_PORT ?? clientEnv.BACKEND_PORT ?? '';
     const wsUrl = process.env.VITE_WS_URL ?? clientEnv.VITE_WS_URL ?? '';
     const healthUrl = process.env.VITE_HEALTH_URL ?? clientEnv.VITE_HEALTH_URL ?? '';
 
@@ -114,7 +114,18 @@ export default (env: configProps): webpack.Configuration => {
             hot: true,
             static: {
                 publicPath: '/',
-            }
+            },
+            proxy: [
+                {
+                    context: ['/health', '/ready'],
+                    target: `http://127.0.0.1:${backendPort || '5001'}`,
+                },
+                {
+                    context: ['/ws'],
+                    target: `http://127.0.0.1:${backendPort || '5001'}`,
+                    ws: true,
+                },
+            ],
         } : undefined,
         plugins: [
             new CleanWebpackPlugin(),

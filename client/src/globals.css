@@ -31,6 +31,7 @@
   --room-header-sticky-top: calc(var(--app-header-height) + var(--room-header-gap));
   --chat-composer-gap: 0.25rem;
   --chat-composer-offset: 13rem;
+  --status-headline-sweep-highlight: color-mix(in oklch, var(--foreground) 42%, white);
 }
 
 .dark {
@@ -55,6 +56,7 @@
   --ring: oklch(0.439 0 0);
   --chat-bubble-peer: oklch(0.3 0 0);
   --chat-bubble-own: oklch(0.235 0 0);
+  --status-headline-sweep-highlight: color-mix(in oklch, var(--foreground) 55%, black);
 }
 
 @theme inline {
@@ -119,7 +121,7 @@
       105deg,
       var(--foreground) 0%,
       var(--foreground) 40%,
-      color-mix(in oklch, var(--foreground) 70%, black) 50%,
+      var(--status-headline-sweep-highlight) 50%,
       var(--foreground) 60%,
       var(--foreground) 100%
     );

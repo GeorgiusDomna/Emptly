@@ -6,6 +6,11 @@ import type { ConnectionStatus } from "@/features/chat/types";
 import { getRoomHeaderStickyTopPx } from "@/lib/app-header";
 import { cn } from "@/lib/utils";
 
+const COMPACT_AFTER_SCROLL_MS = 220;
+const EXPAND_AFTER_SCROLL_MS = 160;
+const COMPACT_SCROLL_BUFFER_PX = 28;
+const EXPAND_SCROLL_BUFFER_PX = 48;
+
 type RoomHeaderProps = {
 	roomId: string | null;
 	status: ConnectionStatus;
@@ -27,10 +32,17 @@ export const RoomHeader = ({
 }: RoomHeaderProps) => {
 	const headerRef = useRef<HTMLElement>(null);
 	const sentinelRef = useRef<HTMLDivElement>(null);
+	const isCompactRef = useRef(false);
+	const compactTransitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const [headerHeight, setHeaderHeight] = useState(0);
+	const [expandedHeaderHeight, setExpandedHeaderHeight] = useState(0);
 	const [isCompact, setIsCompact] = useState(false);
 	const [isExpanded, setIsExpanded] = useState(false);
 	const isConnected = status === "connected";
+
+	useEffect(() => {
+		isCompactRef.current = isCompact;
+	}, [isCompact]);
 
 	useEffect(() => {
 		if (!isCompact) {
@@ -45,7 +57,11 @@ export const RoomHeader = ({
 		}
 
 		const updateHeight = () => {
-			setHeaderHeight(header.offsetHeight);
+			const height = header.offsetHeight;
+			setHeaderHeight(height);
+			if (!isCompactRef.current) {
+				setExpandedHeaderHeight(height);
+			}
 		};
 
 		updateHeight();
@@ -60,36 +76,65 @@ export const RoomHeader = ({
 
 	useEffect(() => {
 		const sentinel = sentinelRef.current;
-		if (!sentinel || typeof IntersectionObserver === "undefined") {
+		if (!sentinel) {
 			return;
 		}
 
-		const createObserver = () => {
-			const stickyTopPx = getRoomHeaderStickyTopPx();
-			const offsetPx = stickyTopPx + headerHeight;
+		const layoutHeight = expandedHeaderHeight > 0 ? expandedHeaderHeight : headerHeight;
+		if (layoutHeight <= 0) {
+			return;
+		}
 
-			return new IntersectionObserver(
-				([entry]) => {
-					setIsCompact((prev) => {
-						const next = !entry.isIntersecting;
-						return prev === next ? prev : next;
-					});
-				},
-				{
-					root: null,
-					rootMargin: `-${offsetPx}px 0px 0px 0px`,
-					threshold: 0
-				}
-			);
+		const stickyTopPx = getRoomHeaderStickyTopPx();
+		const compactLinePx = stickyTopPx + COMPACT_SCROLL_BUFFER_PX;
+		const expandLinePx = stickyTopPx + layoutHeight - EXPAND_SCROLL_BUFFER_PX;
+
+		const scheduleCompactChange = (shouldCompact: boolean) => {
+			if (shouldCompact === isCompactRef.current) {
+				return;
+			}
+
+			if (compactTransitionTimerRef.current !== null) {
+				clearTimeout(compactTransitionTimerRef.current);
+			}
+
+			const delayMs = shouldCompact ? COMPACT_AFTER_SCROLL_MS : EXPAND_AFTER_SCROLL_MS;
+
+			compactTransitionTimerRef.current = setTimeout(() => {
+				compactTransitionTimerRef.current = null;
+				setIsCompact((prev) => (prev === shouldCompact ? prev : shouldCompact));
+			}, delayMs);
 		};
 
-		const observer = createObserver();
-		observer.observe(sentinel);
+		const evaluateScrollPosition = () => {
+			const sentinelTopPx = sentinel.getBoundingClientRect().top;
+
+			if (isCompactRef.current) {
+				if (sentinelTopPx >= expandLinePx) {
+					scheduleCompactChange(false);
+				}
+				return;
+			}
+
+			if (sentinelTopPx <= compactLinePx) {
+				scheduleCompactChange(true);
+			}
+		};
+
+		evaluateScrollPosition();
+
+		window.addEventListener("scroll", evaluateScrollPosition, { passive: true });
+		window.addEventListener("resize", evaluateScrollPosition, { passive: true });
 
 		return () => {
-			observer.disconnect();
+			window.removeEventListener("scroll", evaluateScrollPosition);
+			window.removeEventListener("resize", evaluateScrollPosition);
+			if (compactTransitionTimerRef.current !== null) {
+				clearTimeout(compactTransitionTimerRef.current);
+				compactTransitionTimerRef.current = null;
+			}
 		};
-	}, [headerHeight]);
+	}, [expandedHeaderHeight, headerHeight]);
 
 	return (
 		<>

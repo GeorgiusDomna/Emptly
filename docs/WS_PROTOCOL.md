@@ -8,7 +8,7 @@
 - Сервер валидирует входящие сообщения и при ошибке отправляет событие `error`.
 - Клиент игнорирует события с `roomId`, отличным от текущей комнаты.
 
-Текущая версия протокола: `1.3`.
+Текущая версия протокола: `1.4`.
 
 ## События клиент -> сервер
 
@@ -51,6 +51,22 @@
   "protocolVersion": "1.0"
 }
 ```
+
+## `typing_activity`
+
+```json
+{
+  "type": "typing_activity",
+  "roomId": "string",
+  "userId": "string",
+  "active": true,
+  "protocolVersion": "1.4"
+}
+```
+
+Ограничения:
+- `active` — `true`, когда пользователь набирает текст; `false`, когда поле пустое или набор остановлен.
+- Событие не содержит текст сообщения и не требует завершённого handshake.
 
 ## События сервер -> клиент
 
@@ -101,6 +117,18 @@
   "userId": "string",
   "participants": 1,
   "protocolVersion": "1.0"
+}
+```
+
+## `peer_typing`
+
+```json
+{
+  "type": "peer_typing",
+  "roomId": "string",
+  "userId": "string",
+  "active": true,
+  "protocolVersion": "1.4"
 }
 ```
 
